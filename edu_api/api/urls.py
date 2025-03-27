@@ -35,4 +35,7 @@ urlpatterns = [
     #Materias
     path('paralelos/', views.ParaleloViewSet.as_view(), name='paralelos-list'),
     
+    # Rutas para notas
+    path('alumno/<int:id_alumno>/notas/', views.NotasAlumnoView.as_view(), name='notas-alumno'),
+    path('alumno/<int:id_alumno>/notas/<int:id_periodo>/', views.NotasAlumnoView.as_view(), name='notas-alumno-periodo'),
 ]

@@ -445,10 +445,24 @@ class NivelParaleloProfesorAlumnoSerializer(serializers.ModelSerializer):
         depth = 2
 
 class NotaSerializer(serializers.ModelSerializer):
+    materia = serializers.SerializerMethodField()
+    
     class Meta:
         model = Nota
-        fields = '__all__'
-        depth = 2
+        fields = [
+            'id', 'materia', 'nota1', 'nota2', 'nota3', 'nota4', 'nota5',
+            'nota6', 'nota7', 'nota8', 'nota9', 'nota10', 'nota11', 'nota12',
+            'nota13', 'nota14', 'nota15', 'nota16', 'nota17', 'nota18',
+            'nota19', 'nota20', 'nota21', 'nota22', 'nota23', 'nota24',
+            'nota25', 'nota26', 'nota27', 'nota28', 'nota29', 'nota30',
+            'examen_q1', 'examen_q2', 'examen_q3',
+            'examen_mejora', 'examen_supletorio', 'examen_remedial', 'examen_gracia'
+        ]
+    
+    def get_materia(self, obj):
+        if obj.paralelo_materia_profesor and hasattr(obj.paralelo_materia_profesor, 'materia'):
+            return obj.paralelo_materia_profesor.materia.nombre
+        return "Sin materia asignada"
 
 class NotaAmbitoSerializer(serializers.ModelSerializer):
     class Meta:
@@ -732,8 +746,7 @@ AUTENTICACIÓN PARA REPRESENTANTES
 
 class ParienteLoginSerializer(serializers.Serializer):
     numero_identificacion = serializers.CharField()
-    # Si no hay contraseña, puedes omitirla o usar un campo como "fecha_nacimiento"
-    password = serializers.CharField(required=False)  
+    password = serializers.CharField(required=False)
 
     def validate(self, attrs):
         numero_identificacion = attrs.get('numero_identificacion')
@@ -743,10 +756,16 @@ class ParienteLoginSerializer(serializers.Serializer):
         except Pariente.DoesNotExist:
             raise serializers.ValidationError("Número de identificación no registrado")
 
-        # Si necesitas validar una "contraseña" (ej: últimos 4 dígitos del teléfono)
-        if attrs.get('password') != numero_identificacion:
+        # Si necesitas validar contraseña (ej: últimos 4 dígitos del teléfono)
+        if attrs.get('password') != numero_identificacion:  # Ajustar según tu lógica
             raise serializers.ValidationError("Credenciales incorrectas")
 
+        return {
+            'pariente': pariente,
+            'pariente_id': pariente.id,
+            'nombre': f"{pariente.nombre} {pariente.apellido}",
+        }
+        
         # Generamos un token JWT manualmente (sin vincularlo a un User de Django)
         refresh = RefreshToken.for_user(pariente)  # Necesitamos adaptar esto (ver Paso 2)
         

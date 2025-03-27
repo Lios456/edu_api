@@ -1,10 +1,5 @@
 from rest_framework.permissions import BasePermission
 
-class UsuarioActivoOPariente(BasePermission):
+class IsPariente(BasePermission):
     def has_permission(self, request, view):
-        user = request.user
-        # Si es Usuario, verificar is_active
-        if hasattr(user, 'is_active'):
-            return user.is_active
-        # Si es Pariente, siempre permitir
-        return True
+        return isinstance(request.user, Pariente)

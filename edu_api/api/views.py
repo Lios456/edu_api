@@ -11,16 +11,23 @@ from rest_framework_simplejwt.authentication import JWTAuthentication
 
 from rest_framework_simplejwt.views import TokenObtainPairView
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
-from .permissions import UsuarioActivoOPariente
+from .permissions import *
 from rest_framework import viewsets, filters
 from .middleware import ParienteJWTAuthentication
+from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework.permissions import AllowAny
+
+from .utils import create_jwt_tokens
+from django.contrib.auth import authenticate
+from .authentication import CustomJWTAuthentication
+
 
 
 BASE_KEY = b"Edu4trol@.#"
 
 class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
     permission_classes = [AllowAny]
+    
     def validate(self, attrs):
         print(f"Datos recibidos en serializer: {attrs}")
         
@@ -28,13 +35,11 @@ class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
         password = attrs.get("password")
         
         try:
-            # Se asume que el campo para identificar al usuario es 'usuario'
             usuario = Usuario.objects.get(usuario=username)
         except Usuario.DoesNotExist:
             raise serializers.ValidationError("Credenciales inválidas")
         
         try:
-            # Se asume que la contraseña cifrada se guarda en 'clave' en base64
             stored_encrypted = base64.b64decode(usuario.clave)
             decrypted_password = decrypt_ci4(stored_encrypted, BASE_KEY, raw_data=True).decode("utf-8")
         except Exception as e:
@@ -45,10 +50,14 @@ class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
         
         # Asignamos el usuario y generamos el token
         self.user = usuario
+        # After successful validation
         refresh = self.get_token(self.user)
-        # Forzamos que el token incluya el identificador correcto
-        refresh['user_id'] = str(self.user.pk)
         
+        # Add standard claims expected by authentication
+        refresh['user_id'] = str(self.user.pk)
+        refresh['user_type'] = 'usuario'
+        refresh.access_token['user_type'] = 'usuario'
+
         return {
             "refresh": str(refresh),
             "access": str(refresh.access_token),
@@ -58,8 +67,9 @@ class CustomTokenObtainPairView(TokenObtainPairView):
     serializer_class = CustomTokenObtainPairSerializer
 
 
-# Usuarios
+# ============================== USUARIOS ==============================
 class UsuarioDetailView(APIView):
+    authentication_classes = [CustomJWTAuthentication]
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
@@ -70,15 +80,20 @@ class UsuarioDetailView(APIView):
         except Usuario.DoesNotExist:
             return Response(status=status.HTTP_404_NOT_FOUND)
 
-# Parientes
+# ============================== PARIENTES ==============================
 class RepresentadosView(APIView):
-    permission_classes = [UsuarioActivoOPariente]
+    authentication_classes = [CustomJWTAuthentication]
+    permission_classes = [IsAuthenticated]
 
     def get(self, request, id_pariente=None):
         if id_pariente:
             try:
+                alumnos = []
                 representados = AlumnoPariente.objects.filter(pariente_id=id_pariente)
-                serializer = AlumnoParienteSerializer(representados, many=True)
+                for representado in representados:
+                    alumno = Alumno.objects.get(pk=representado.alumno_id)
+                    alumnos.append(alumno)
+                serializer = AlumnoSerializer(alumnos, many=True)
                 return Response(serializer.data)
             except AlumnoPariente.DoesNotExist:
                 return Response(status=status.HTTP_404_NOT_FOUND)
@@ -86,7 +101,8 @@ class RepresentadosView(APIView):
             return Response({"message": "No se ha especificado un ID de pariente"}, status=status.HTTP_400_BAD_REQUEST)
 
 class DetalleEstudianteView(APIView):
-    permission_classes = [UsuarioActivoOPariente]
+    authentication_classes = [CustomJWTAuthentication]
+    permission_classes = [IsAuthenticated]
 
     def get(self, request, id_estudiante):
         try:
@@ -96,18 +112,53 @@ class DetalleEstudianteView(APIView):
         except Alumno.DoesNotExist:
             return Response(status=status.HTTP_404_NOT_FOUND)
 
-# Tutores
+class ParienteLoginView(APIView):
+    authentication_classes = []  # Disable default authentication
+    permission_classes = [AllowAny]  # Add this line
+
+    def post(self, request):
+        numero_identificacion = request.data.get('numero_identificacion')
+        password = request.data.get('password')
+        
+        user = authenticate(
+            request,
+            username=numero_identificacion,
+            password=password,
+            backend='api.backends.ParienteAuthBackend'
+        )
+        
+        if user and isinstance(user, Pariente):
+            tokens = create_jwt_tokens(user)
+            return Response(tokens)
+        return Response({'error': 'Credenciales inválidas'}, status=400)
+    
+
+
+# ============================== INSPECTOR ==============================
 class PeriodosView(APIView):
-    authentication_classes = [JWTAuthentication, ParienteJWTAuthentication]
-    permission_classes = [UsuarioActivoOPariente]  # Changed from AllowAny
+    authentication_classes = [CustomJWTAuthentication]
+    permission_classes = [IsAuthenticated]
 
     def get(self, request):
-        periodos = PeriodoAcademico.objects.filter(activo='S').order_by('-id')
+        periodos = PeriodoAcademico.objects.order_by('-id')
         serializer = PeriodoAcademicoSerializer(periodos, many=True)
         return Response(serializer.data)
 
+class UsuarioDetailView(APIView):
+    authentication_classes = [CustomJWTAuthentication]
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        try:
+            usuario = request.user
+            serializer = UsuarioSerializer(usuario)
+            return Response(serializer.data)
+        except Usuario.DoesNotExist:
+            return Response(status=status.HTTP_404_NOT_FOUND)
+
 class CursosView(APIView):
-    #permission_classes = [IsAuthenticated]
+    authentication_classes = [CustomJWTAuthentication]
+    permission_classes = [IsAuthenticated]
 
     def get(self, request, id_periodo):
         paralelos = Paralelo.objects.filter(curso__seccion__periodo_academico__id=id_periodo)
@@ -115,7 +166,8 @@ class CursosView(APIView):
         return Response(paralelos.data)
 
 class EstudiantesCursoView(APIView):
-    #permission_classes = [IsAuthenticated]
+    authentication_classes = [CustomJWTAuthentication]
+    permission_classes = [IsAuthenticated]
 
     def get(self, request, id_curso):
         
@@ -124,6 +176,7 @@ class EstudiantesCursoView(APIView):
         return Response(serializer.data)
 
 class AtrasosView(APIView):
+    authentication_classes = [CustomJWTAuthentication]
     permission_classes = [IsAuthenticated]
 
     def post(self, request):
@@ -155,8 +208,9 @@ class AtrasosView(APIView):
             return Response(status=status.HTTP_404_NOT_FOUND)
 
 
-# Notificaciones
+# ============================== NOTIFICACIONES ==============================
 class NotificacionesView(APIView):
+    authentication_classes = [CustomJWTAuthentication]
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
@@ -172,6 +226,7 @@ class NotificacionesView(APIView):
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 class NotificacionDetailView(APIView):
+    authentication_classes = [CustomJWTAuthentication]
     permission_classes = [IsAuthenticated]
 
     def get(self, request, id):
@@ -201,12 +256,11 @@ class NotificacionDetailView(APIView):
         except Notificacion.DoesNotExist:
             return Response(status=status.HTTP_404_NOT_FOUND)
         
-"""
-Atrasos
-"""
-
+# ============================== ATRASOS ==============================
 class AtrasoViewSet(viewsets.ModelViewSet):
-    #permission_classes = [IsAuthenticated]
+    authentication_classes = [CustomJWTAuthentication]
+    permission_classes = [IsAuthenticated]
+    
     serializer_class = AtrasoSerializer
     
     queryset = Atraso.objects.all()
@@ -220,7 +274,8 @@ class AtrasoViewSet(viewsets.ModelViewSet):
         serializer.save(created_by=self.request.user)
         
 class ParaleloViewSet(APIView):
-    permission_classes = [UsuarioActivoOPariente]
+    authentication_classes = [CustomJWTAuthentication]
+    permission_classes = [IsAuthenticated]
     serializer_class = ParaleloSerializer
     
     def get(self, request):
@@ -228,17 +283,47 @@ class ParaleloViewSet(APIView):
         serializer = ParaleloSerializer(paralelos, many=True)
         return Response(serializer.data)
 
-"""
-Parientes
-"""    
+# ============================== NOTAS ==============================
+class NotasAlumnoView(APIView):
+    authentication_classes = [CustomJWTAuthentication]
+    permission_classes = [IsAuthenticated]
 
-class ParienteLoginView(APIView):
-    def post(self, request):
-        serializer = ParienteLoginSerializer(data=request.data)
-        if serializer.is_valid():
-            return Response(serializer.validated_data, status=status.HTTP_200_OK)
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-    
+    def get(self, request, id_alumno, id_periodo=None):
+        """
+        Obtiene las notas de un alumno para un periodo académico específico.
+        Si no se especifica el periodo, devuelve las notas de todos los periodos.
+        """
+        try:
+            # Verificar que el alumno existe
+            alumno = Alumno.objects.get(pk=id_alumno)
+            
+            # Filtrar notas por alumno y opcionalmente por periodo
+            if id_periodo:
+                notas = Nota.objects.filter(
+                    alumno_id=id_alumno,
+                    periodo_academico_id=id_periodo
+                ).select_related('paralelo_materia_profesor__materia')
+            else:
+                notas = Nota.objects.filter(
+                    alumno_id=id_alumno
+                ).select_related('paralelo_materia_profesor__materia')
+            
+            # Serializar los resultados
+            serializer = NotaSerializer(notas, many=True)
+            return Response(serializer.data)
+            
+        except Alumno.DoesNotExist:
+            return Response(
+                {"error": "Estudiante no encontrado"}, 
+                status=status.HTTP_404_NOT_FOUND
+            )
+        except Exception as e:
+            return Response(
+                {"error": str(e)}, 
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+  
+
 
     
     

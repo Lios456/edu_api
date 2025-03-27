@@ -1723,6 +1723,26 @@ class Pariente(models.Model):
     created_at = models.DateTimeField(blank=True, null=True)
     updated_id = models.IntegerField(blank=True, null=True)
     updated_at = models.DateTimeField(blank=True, null=True)
+    
+    @property
+    def is_active(self):
+        return True  
+    
+    @is_active.setter
+    def is_active(self, value):
+        pass
+    
+    @property
+    def is_authenticated(self):
+        return True  # Required for Django's authentication system
+
+    @property
+    def is_anonymous(self):
+        return False
+
+    @property
+    def is_staff(self):
+        return False  # Or implement actual staff logic if needed
 
     class Meta:
         managed = False

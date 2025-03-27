@@ -140,7 +140,7 @@ JWT
 """
 AUTHENTICATION_BACKENDS = [
     'django.contrib.auth.backends.ModelBackend',  # Para usuarios normales
-    'api.backends.ParienteAuthBackend',       # Para parientes
+    'api.backends.ParienteAuthBackend',     # Para parientes
 ]
 
 
@@ -149,11 +149,11 @@ AUTH_USER_MODEL = 'api.Usuario'
 
 REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': [
-        'api.middleware.ParienteJWTAuthentication',  # Primero para parientes
         'rest_framework_simplejwt.authentication.JWTAuthentication',
+        'api.authentication.CustomJWTAuthentication',
     ],
     'DEFAULT_PERMISSION_CLASSES': [
-        'rest_framework.permissions.IsAuthenticatedOrReadOnly',  # Changed from IsAuthenticated
+        'rest_framework.permissions.IsAuthenticated',
     ],
 }
 
