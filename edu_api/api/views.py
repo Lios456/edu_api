@@ -132,7 +132,36 @@ class ParienteLoginView(APIView):
             return Response(tokens)
         return Response({'error': 'Credenciales inválidas'}, status=400)
     
+class HorarioEstudianteView(APIView):
+    authentication_classes = [CustomJWTAuthentication]
+    permission_classes = [IsAuthenticated]
 
+    def get(self, request, id_estudiante):
+        try:
+            periodo_activo = PeriodoAcademico.objects.get(activo_pariente='S')
+            matricula = Matricula.objects.get(alumno_id=id_estudiante, periodo_academico=periodo_activo)
+            if not matricula:
+                return Response({"message": "El estudiante no tiene una matricula asignada"}, status=status.HTTP_400_BAD_REQUEST)
+            
+            if not matricula.paralelo:
+                return Response({"message": "El estudiante no tiene un paralelo asignado"}, status=status.HTTP_400_BAD_REQUEST)
+            
+            paralelo = matricula.paralelo
+            
+            materias = []
+            
+            paralelo_materia_profesor = ParaleloMateriaProfesor.objects.filter(paralelo_id=paralelo.id)
+            
+            for pm in paralelo_materia_profesor:
+                materia = pm.materia
+                if materias.count(materia) == 0:
+                    materias.append(materia)
+            
+            serializer = MateriaSerializer(materias, many=True)
+            return Response(serializer.data)
+        except Horario.DoesNotExist:
+            return Response(status=status.HTTP_404_NOT_FOUND)
+        
 
 # ============================== INSPECTOR ==============================
 class PeriodosView(APIView):

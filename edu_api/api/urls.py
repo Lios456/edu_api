@@ -16,6 +16,7 @@ urlpatterns = [
     # Parientes
     path('representados/<int:id_pariente>/', views.RepresentadosView.as_view(), name='representados-list'),
     path('detalles/<int:id_estudiante>/', views.DetalleEstudianteView.as_view(), name='detalle-estudiante'),
+    path('horario/<int:id_estudiante>/', views.HorarioEstudianteView.as_view(), name='horario-estudiante'),
     
     # Tutores
     path('periodos/', views.PeriodosView.as_view(), name='periodos-list'),
